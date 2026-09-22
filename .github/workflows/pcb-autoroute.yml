@@ -1,0 +1,12 @@
+name: PCB Autoroute
+on: {workflow_dispatch: {}}
+permissions: {contents: read}
+jobs:
+  autoroute:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python scripts/prepare_autoroute.py pcb/examples/example.kicad_pcb /tmp/autoroute_input.kicad_pcb
+      - run: echo "Use kicad/kicad:10.0.5 for DSN/SES and ghcr.io/freerouting/freerouting:2.2.4 for routing."

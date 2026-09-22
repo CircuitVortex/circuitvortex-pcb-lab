@@ -32,16 +32,21 @@ jobs:
           apt-get install -y --no-install-recommends \
             curl \
             unzip \
-            ca-certificates
+            ca-certificates \
+            xvfb \
+            xauth
           rm -rf /var/lib/apt/lists/*
 
       - name: Verify KiCad Python API
         run: |
-          python3 --version
-          which python3
-          pcbnew --version
-          kicad-cli --version
-          python3 -c "import pcbnew; print('pcbnew:', pcbnew.__file__)"
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            bash -c '
+              python3 --version
+              which python3
+              pcbnew --version
+              kicad-cli --version
+              python3 -c "import pcbnew; print(\"pcbnew:\", pcbnew.__file__)"
+            '
 
       - name: Compile project Python
         run: |
@@ -50,17 +55,17 @@ jobs:
       - name: Prepare autoroute input
         run: |
           mkdir -p /tmp/autoroute
-          python3 \
-            scripts/prepare_autoroute.py \
-            pcb/examples/example.kicad_pcb \
-            /tmp/autoroute/input.kicad_pcb
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            python3 scripts/prepare_autoroute.py \
+              pcb/examples/example.kicad_pcb \
+              /tmp/autoroute/input.kicad_pcb
 
       - name: Export Specctra DSN
         run: |
-          python3 \
-            scripts/export_dsn.py \
-            /tmp/autoroute/input.kicad_pcb \
-            /tmp/autoroute/input.dsn
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            python3 scripts/export_dsn.py \
+              /tmp/autoroute/input.kicad_pcb \
+              /tmp/autoroute/input.dsn
           test -s /tmp/autoroute/input.dsn
 
       - name: Install Java 25
@@ -91,11 +96,11 @@ jobs:
 
       - name: Import routed SES
         run: |
-          python3 \
-            scripts/import_ses.py \
-            /tmp/autoroute/input.kicad_pcb \
-            /tmp/autoroute/routed.ses \
-            /tmp/autoroute/autorouted.kicad_pcb
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            python3 scripts/import_ses.py \
+              /tmp/autoroute/input.kicad_pcb \
+              /tmp/autoroute/routed.ses \
+              /tmp/autoroute/autorouted.kicad_pcb
           test -s /tmp/autoroute/autorouted.kicad_pcb
 
       - name: Run final DRC

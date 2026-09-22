@@ -1,0 +1,127 @@
+name: PCB Auto Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pcb/input/**'
+      - 'scripts/**'
+      - 'dfm/**'
+      - '.github/workflows/pcb-auto-pipeline.yml'
+  workflow_dispatch:
+    inputs:
+      board:
+        description: 'Path under pcb/input, e.g. pcb/input/myboard.kicad_pcb'
+        required: true
+        type: string
+      autoroute:
+        description: 'Run FreeRouting'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    container: kicad/kicad:10.0.5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install runtime tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-pip default-jre-headless curl unzip
+          python3 -m pip install --break-system-packages -r requirements.txt
+          rm -rf /var/lib/apt/lists/*
+
+      - name: Install FreeRouting
+        run: |
+          mkdir -p /opt/freerouting
+          curl -fL --retry 4 --retry-delay 2 \
+            https://github.com/freerouting/freerouting/releases/download/v2.2.4/freerouting-2.2.4.jar \
+            -o /opt/freerouting/freerouting.jar
+          java -version
+          test -s /opt/freerouting/freerouting.jar
+
+      - name: Select input board
+        id: board
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BOARD='${{ inputs.board }}'
+          else
+            BOARD="$(find pcb/input -maxdepth 1 -type f -name '*.kicad_pcb' -print | sort | head -n1)"
+          fi
+          test -n "$BOARD" || { echo 'No .kicad_pcb found in pcb/input'; exit 1; }
+          test -f "$BOARD" || { echo "Board not found: $BOARD"; exit 1; }
+          echo "path=$BOARD" >> "$GITHUB_OUTPUT"
+
+      - name: Inspect
+        run: |
+          mkdir -p runtime/output runtime/reports
+          python3 scripts/inspect_pcb.py "${{ steps.board.outputs.path }}" -o runtime/reports/inspection.json
+
+      - name: DRC before changes
+        run: |
+          set +e
+          kicad-cli pcb drc --exit-code-violations -o runtime/output/drc-before.rpt "${{ steps.board.outputs.path }}"
+          rc=$?
+          set -e
+          if [ $rc -gt 5 ]; then exit $rc; fi
+          echo "DRC exit code: $rc" > runtime/output/drc-before-status.txt
+
+      - name: DFM
+        run: |
+          python3 scripts/dfm_check.py "${{ steps.board.outputs.path }}" -o runtime/reports/dfm.json
+
+      - name: Autoroute
+        if: ${{ github.event_name == 'push' || inputs.autoroute == true }}
+        env:
+          FREEROUTING_JAR: /opt/freerouting/freerouting.jar
+        run: |
+          python3 scripts/autoroute.py "${{ steps.board.outputs.path }}" --output runtime/output/autorouted.kicad_pcb --passes 500
+
+      - name: Refill zones
+        if: ${{ github.event_name == 'push' || inputs.autoroute == true }}
+        run: |
+          python3 scripts/refill_zones.py runtime/output/autorouted.kicad_pcb runtime/output/autorouted_refilled.kicad_pcb
+
+      - name: Final DRC
+        if: ${{ github.event_name == 'push' || inputs.autoroute == true }}
+        run: |
+          set +e
+          kicad-cli pcb drc --exit-code-violations -o runtime/output/drc-final.rpt runtime/output/autorouted_refilled.kicad_pcb
+          rc=$?
+          set -e
+          echo "Final DRC exit code: $rc" > runtime/output/drc-final-status.txt
+          if [ $rc -gt 5 ]; then exit $rc; fi
+
+      - name: Final DFM
+        if: ${{ github.event_name == 'push' || inputs.autoroute == true }}
+        run: |
+          python3 scripts/dfm_check.py runtime/output/autorouted_refilled.kicad_pcb -o runtime/output/dfm-final.json
+
+      - name: Package results
+        run: |
+          cp "${{ steps.board.outputs.path }}" runtime/output/original.kicad_pcb
+          python3 scripts/generate_summary.py --inspect runtime/reports/inspection.json --dfm runtime/reports/dfm.json || true
+          cat > runtime/output/pipeline-status.json <<EOF
+          {
+            "board": "${{ steps.board.outputs.path }}",
+            "commit": "${{ github.sha }}",
+            "autoroute": true,
+            "toolchain": {"kicad": "10.0.5", "freerouting": "2.2.4"}
+          }
+          EOF
+
+      - name: Upload PCB artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: circuitvortex-pcb-results
+          path: runtime/
+          if-no-files-found: error
+          retention-days: 14

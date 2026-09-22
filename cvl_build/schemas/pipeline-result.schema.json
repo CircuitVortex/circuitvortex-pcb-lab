@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "required": [
+    "status",
+    "timestamp",
+    "stages"
+  ]
+}

@@ -1,0 +1,11 @@
+name: PCB DRC
+on: {workflow_dispatch: {}}
+permissions: {contents: read}
+jobs:
+  drc:
+    runs-on: ubuntu-latest
+    container: kicad/kicad:10.0.5
+    steps:
+      - uses: actions/checkout@v4
+      - run: pcbnew --version
+      - run: echo "Add board-specific native KiCad DRC invocation after selecting the installed CLI syntax."

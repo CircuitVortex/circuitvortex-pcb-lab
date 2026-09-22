@@ -1,0 +1,9 @@
+services:
+  pcb-lab:
+    build: .
+    ports: ["8000:8000"]
+    volumes: ["./runtime:/workspace/runtime"]
+    environment:
+      PCB_LAB_ROOT: /workspace
+      MAX_UPLOAD_BYTES: 52428800
+    restart: unless-stopped

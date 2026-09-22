@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 import argparse,shutil,re
 from pathlib import Path
-from common import save_json,utc_now
+try:
+    from scripts.common import save_json,utc_now
+except ImportError:
+    from common import save_json,utc_now
 pat=re.compile(r'^\s*\((gr_text|gr_line|gr_rect|gr_circle|gr_arc|gr_poly|dimension)\b')
 def items(text):
     lines=text.splitlines(True); out=[]; i=0

@@ -3,16 +3,18 @@ import json, os, shutil, subprocess, threading, uuid, zipfile
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 ROOT=Path(os.getenv('PCB_LAB_ROOT', Path(__file__).resolve().parents[1]))
 JOBS=ROOT/'runtime'/'jobs'; JOBS.mkdir(parents=True,exist_ok=True)
 MAX_UPLOAD=int(os.getenv('MAX_UPLOAD_BYTES', '52428800'))
-app=FastAPI(title='CircuitVortex PCB Lab API', version='2.0.0')
+app=FastAPI(title='CircuitVortex PCB Lab API', version='2.1.0')
+app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in os.getenv('CORS_ORIGINS','*').split(',') if x.strip()], allow_credentials=False, allow_methods=['*'], allow_headers=['*'])
 
 class Action(BaseModel):
     action: str
-    parameters: dict = {}
+    parameters: dict = Field(default_factory=dict)
 
 
 def safe_extract(z: zipfile.ZipFile, dest: Path):

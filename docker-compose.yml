@@ -6,4 +6,7 @@ services:
     environment:
       PCB_LAB_ROOT: /workspace
       MAX_UPLOAD_BYTES: 52428800
+      CORS_ORIGINS: "*"
+      FREEROUTING_PASSES: 500
+      FREEROUTING_TIMEOUT: 1200
     restart: unless-stopped

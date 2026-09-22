@@ -40,7 +40,7 @@ def fix(job,b):
 
 def autoroute(job,b):
     out=job/'output'; target=out/'autorouted.kicad_pcb';
-    r=cmd('python3',str(ROOT/'scripts/autoroute.py'),str(b),'--output',str(target),timeout=1500)
+    r=cmd('python3',str(ROOT/'scripts/autoroute.py'),str(b),'--output',str(target),'--passes',os.getenv('FREEROUTING_PASSES','500'),'--timeout',os.getenv('FREEROUTING_TIMEOUT','1200'),timeout=1500)
     if r.returncode: raise RuntimeError(r.stderr or r.stdout)
     data=json.loads(r.stdout); report(job,'autoroute',data); return target
 
